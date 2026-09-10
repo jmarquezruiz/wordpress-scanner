@@ -81,7 +81,7 @@ func runScanDB(cmd *cobra.Command, args []string) error {
 	r := report.Report{
 		Meta: report.Meta{
 			Tool:           "wordpress-scanner",
-			Version:        "1.0.3",
+			Version:        "1.4.0",
 			ScanDate:       time.Now().Format(time.RFC3339),
 			TargetPath:     creds.Host + "/" + creds.Database,
 			ElapsedSeconds: elapsed,

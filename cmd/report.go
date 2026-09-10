@@ -50,10 +50,17 @@ func runReport(cmd *cobra.Command, args []string) error {
 	}
 	ui.CheckOK(fmt.Sprintf("Siguientes pasos: %s", nextStepsPath))
 
+	htmlPath := filepath.Join(dir, "wpscanner-report.html")
+	if err := report.GenerateHTMLReport(*r, dir); err != nil {
+		return fmt.Errorf("error generating HTML report: %w", err)
+	}
+	ui.CheckOK(fmt.Sprintf("Informe HTML: %s", htmlPath))
+
 	ui.PrintResultBox("ARCHIVOS GENERADOS",
 		[]string{
 			clientReportPath,
 			nextStepsPath,
+			htmlPath,
 		}, ui.Cyan)
 
 	return nil

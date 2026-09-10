@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"wordpress-scanner/internal/executil"
 	"wordpress-scanner/internal/report"
 )
 
@@ -16,19 +17,10 @@ func (c *ClamAV) Name() string {
 
 func (c *ClamAV) Run(path string, logs bool) ([]report.Finding, error) {
 	args := []string{"-ri", "--no-summary", path}
-	cmd := exec.Command("clamscan", args...)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
+	output, err := executil.Run("clamscan", args, logs)
 
 	var findings []report.Finding
-	scanner := bufio.NewScanner(stdout)
+	scanner := bufio.NewScanner(strings.NewReader(output))
 	id := 0
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -38,7 +30,7 @@ func (c *ClamAV) Run(path string, logs bool) ([]report.Finding, error) {
 				filePath := strings.TrimSpace(parts[0])
 				description := strings.TrimSpace(parts[1])
 				id++
-				findings = append(findings, report.Finding{
+				finding := report.Finding{
 					ID:             "CLAM-" + padID(id),
 					Scanner:        c.Name(),
 					File:           filePath,
@@ -47,12 +39,14 @@ func (c *ClamAV) Run(path string, logs bool) ([]report.Finding, error) {
 					Description:    description,
 					Indicator:      "ClamAV",
 					Recommendation: "Review and delete file",
-				})
+				}
+				enrichFinding(&finding)
+				findings = append(findings, finding)
 			}
 		}
 	}
 
-	if err := cmd.Wait(); err != nil {
+	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() == 1 {
 				return findings, nil

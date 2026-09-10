@@ -92,16 +92,24 @@ func runScan(cmd *cobra.Command, args []string) error {
 			s = &scanner.PMF{}
 		case "Linux Malware Detect (maldet -a)":
 			s = &scanner.Maldet{}
-		case "Opencode Subagente (deep analysis)":
-			s = &scanner.Opencode{PreviousFindings: formatFindings(allFindings)}
+		case "WordPress Integrity (WP-CLI checksums)":
+			s = &scanner.WordPressIntegrity{}
+		case "Anomalous PHP locations":
+			s = &scanner.AnomalousPHP{}
 		default:
 			continue
 		}
 
-		sp := ui.NewSpinner(s.Name())
-		sp.Start()
+		var sp interface{ Stop() }
+		if !config.ShowLogs {
+			spinner := ui.NewSpinner(s.Name())
+			spinner.Start()
+			sp = spinner
+		}
 		findings, scanErr := s.Run(config.Path, config.ShowLogs)
-		sp.Stop()
+		if sp != nil {
+			sp.Stop()
+		}
 		allFindings = append(allFindings, findings...)
 		if scanErr != nil && len(findings) == 0 {
 			ui.CheckWarn(s.Name() + ": " + scanErr.Error())
@@ -153,6 +161,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Section("Generando reportes")
+	allFindings = report.DeduplicateFindings(allFindings)
 
 	dir, err := report.EnsureOutputDir()
 	if err != nil {
@@ -171,6 +180,11 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ui.CheckOK(fmt.Sprintf("wpscanner-report.md generado en %s", dir))
+
+	if err := report.GenerateHTMLReport(r, dir); err != nil {
+		return err
+	}
+	ui.CheckOK(fmt.Sprintf("wpscanner-report.html generado en %s", dir))
 
 	ui.PrintSummary(r.Summary.Critical, r.Summary.High, r.Summary.Medium, r.Summary.Low, r.Summary.TotalFindings, r.Summary.DBFindings, r.Summary.Cleaned)
 	ui.PrintFindingsTable(findingsToRows(allFindings))
@@ -228,8 +242,14 @@ func dbFindingsToRows(findings []report.DBFinding) []ui.DBTableRow {
 
 func buildReport(path string, creds *ui.DBCredentials, findings []report.Finding, dbFindings []report.DBFinding, elapsed int) report.Report {
 	summary := report.Summary{}
+	uniqueFiles := make(map[string]struct{})
 	for _, f := range findings {
 		summary.TotalFindings++
+		summary.EvidenceCount += f.Occurrences
+		uniqueFiles[f.File] = struct{}{}
+		if f.Occurrences > 1 {
+			summary.DuplicateFindings += f.Occurrences - 1
+		}
 		switch f.Severity {
 		case report.SeverityCritical:
 			summary.Critical++
@@ -247,6 +267,7 @@ func buildReport(path string, creds *ui.DBCredentials, findings []report.Finding
 			summary.Injections++
 		}
 	}
+	summary.UniqueFiles = len(uniqueFiles)
 	summary.DBFindings = len(dbFindings)
 
 	domain := ""
@@ -257,32 +278,17 @@ func buildReport(path string, creds *ui.DBCredentials, findings []report.Finding
 	return report.Report{
 		Meta: report.Meta{
 			Tool:           "wordpress-scanner",
-			Version:        "1.0.3",
+			Version:        "1.4.0",
 			ScanDate:       time.Now().Format(time.RFC3339),
 			TargetPath:     path,
 			TargetDomain:   domain,
 			ElapsedSeconds: elapsed,
 		},
-		Findings:   findings,
-		DBFindings: dbFindings,
-		Summary:    summary,
+		Findings:    findings,
+		DBFindings:  dbFindings,
+		Summary:     summary,
 		CleanHashes: make(map[string]string),
 	}
-}
-
-func formatFindings(findings []report.Finding) string {
-	if len(findings) == 0 {
-		return "No findings yet"
-	}
-	result := ""
-	for i, f := range findings {
-		if i > 5 {
-			result += fmt.Sprintf("... and %d more", len(findings)-5)
-			break
-		}
-		result += fmt.Sprintf("- %s: %s (%s)\n", f.File, f.Description, f.Severity)
-	}
-	return result
 }
 
 func runCleanLocal(conn *dbscanner.MySQLConnector, dbFindings []report.DBFinding, dir string) error {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"wordpress-scanner/internal/executil"
 	"wordpress-scanner/internal/report"
 )
 
@@ -46,16 +47,10 @@ func (p *PMF) Run(path string, logs bool) ([]report.Finding, error) {
 	if logs {
 		args = append(args, "-v")
 	}
-	cmd := exec.Command(pmfPath, args...)
-
-	output, err := cmd.CombinedOutput()
+	output, err := executil.Run(pmfPath, args, logs)
 	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
-		if !ok {
-			return nil, err
-		}
 		if len(strings.TrimSpace(string(output))) == 0 {
-			return nil, fmt.Errorf("error de ejecución (exit %d): sin output", exitErr.ExitCode())
+			return nil, fmt.Errorf("error de ejecución: sin output: %w", err)
 		}
 	}
 
@@ -67,26 +62,82 @@ func (p *PMF) Run(path string, logs bool) ([]report.Finding, error) {
 		if line == "" || strings.Contains(line, "===") || strings.HasPrefix(line, "Match:") || strings.HasPrefix(line, "File:") {
 			continue
 		}
-		if strings.HasPrefix(line, "/") || strings.Contains(line, ".php") || strings.Contains(line, ".htaccess") {
-			id++
-			severity := report.SeverityHigh
-			if strings.Contains(strings.ToLower(line), "webshell") || strings.Contains(strings.ToLower(line), "backdoor") || strings.Contains(strings.ToLower(line), "obfuscated") {
-				severity = report.SeverityCritical
-			}
-			findings = append(findings, report.Finding{
-				ID:             "PMF-" + padID(id),
-				Scanner:        p.Name(),
-				File:           line,
-				Severity:       severity,
-				Type:           detectType(line),
-				Description:    line,
-				Indicator:      "DodgyPhp",
-				Recommendation: "Review file manually",
-			})
+		file, rule, ok := parsePMFLine(line)
+		if !ok {
+			continue
 		}
+
+		id++
+		severity := severityForRule(rule)
+		finding := report.Finding{
+			ID:             "PMF-" + padID(id),
+			Scanner:        p.Name(),
+			File:           file,
+			Severity:       severity,
+			Type:           detectType(rule),
+			Description:    line,
+			Indicator:      "DodgyPhp",
+			Recommendation: "Review file manually",
+			Rule:           rule,
+			Evidence:       line,
+			Confidence:     confidenceForRule(rule),
+		}
+		enrichFinding(&finding)
+		findings = append(findings, finding)
 	}
 
 	return findings, nil
+}
+
+// parsePMFLine only accepts PMF's finding markers. This avoids treating
+// progress, warnings, and arbitrary PHP paths as detections.
+func parsePMFLine(line string) (string, string, bool) {
+	markers := []string{"match found:", "dangerous file found:"}
+	marker := ""
+	for _, candidate := range markers {
+		if strings.Contains(strings.ToLower(line), candidate) {
+			marker = candidate
+			break
+		}
+	}
+	if marker == "" {
+		return "", "", false
+	}
+
+	start := strings.Index(strings.ToLower(line), marker) + len(marker)
+	remainder := strings.TrimSpace(line[start:])
+	rule := "DangerousPhp"
+	if open := strings.LastIndex(remainder, "("); open >= 0 && strings.HasSuffix(remainder, ")") {
+		rule = strings.TrimSpace(remainder[open+1 : len(remainder)-1])
+		remainder = strings.TrimSpace(remainder[:open])
+	}
+	if remainder == "" {
+		return "", "", false
+	}
+
+	return remainder, rule, true
+}
+
+func severityForRule(rule string) report.Severity {
+	lower := strings.ToLower(rule)
+	if strings.Contains(lower, "webshell") || strings.Contains(lower, "backdoor") {
+		return report.SeverityCritical
+	}
+	if strings.Contains(lower, "obfuscat") {
+		return report.SeverityHigh
+	}
+	return report.SeverityMedium
+}
+
+func confidenceForRule(rule string) string {
+	lower := strings.ToLower(rule)
+	if strings.Contains(lower, "webshell") || strings.Contains(lower, "backdoor") {
+		return "high"
+	}
+	if strings.Contains(lower, "obfuscat") || strings.Contains(lower, "dangerous") {
+		return "medium"
+	}
+	return "low"
 }
 
 func detectType(line string) string {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"wordpress-scanner/internal/executil"
 	"wordpress-scanner/internal/ui"
 )
 
@@ -27,11 +28,10 @@ func updateClamAV(logs bool) error {
 	}
 	cmd := exec.Command("freshclam")
 	if logs {
-		out, err := cmd.CombinedOutput()
+		out, err := executil.Run("freshclam", nil, true)
 		if err != nil {
-			return fmt.Errorf("freshclam error: %s", string(out))
+			return fmt.Errorf("freshclam error: %s", out)
 		}
-		fmt.Println(string(out))
 	} else {
 		if err := cmd.Run(); err != nil {
 			return err
@@ -47,11 +47,10 @@ func updateMaldet(logs bool) error {
 	}
 	cmd := exec.Command("maldet", "-u")
 	if logs {
-		out, err := cmd.CombinedOutput()
+		out, err := executil.Run("maldet", []string{"-u"}, true)
 		if err != nil {
-			return fmt.Errorf("maldet update error: %s", string(out))
+			return fmt.Errorf("maldet update error: %s", out)
 		}
-		fmt.Println(string(out))
 	} else {
 		if err := cmd.Run(); err != nil {
 			return err

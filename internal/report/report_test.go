@@ -3,6 +3,7 @@ package report
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func TestReportJSONRoundTrip(t *testing.T) {
 	r := Report{
 		Meta: Meta{
 			Tool:    "wordpress-scanner",
-			Version: "1.0.3",
+			Version: "1.4.0",
 		},
 		Findings: []Finding{
 			{
@@ -59,8 +60,8 @@ func TestReportJSONRoundTrip(t *testing.T) {
 		t.Fatalf("expected no error loading report, got %v", err)
 	}
 
-	if loaded.Meta.Version != "1.0.3" {
-		t.Errorf("expected version 1.0.3, got %s", loaded.Meta.Version)
+	if loaded.Meta.Version != "1.4.0" {
+		t.Errorf("expected version 1.4.0, got %s", loaded.Meta.Version)
 	}
 	if len(loaded.Findings) != 1 {
 		t.Errorf("expected 1 finding, got %d", len(loaded.Findings))
@@ -106,5 +107,54 @@ func TestSummaryCounters(t *testing.T) {
 	}
 	if r.Summary.Backdoors != 2 {
 		t.Errorf("expected 2 backdoors, got %d", r.Summary.Backdoors)
+	}
+}
+
+func TestDeduplicateFindingsPreservesOccurrences(t *testing.T) {
+	findings := []Finding{
+		{Scanner: "pmf", File: "consultzone.php", Rule: "ObfuscatedPhp", Evidence: "first"},
+		{Scanner: "pmf", File: "consultzone.php", Rule: "ObfuscatedPhp", Evidence: "second"},
+		{Scanner: "pmf", File: "consultzone.php", Rule: "DangerousPhp", Evidence: "third"},
+	}
+
+	got := DeduplicateFindings(findings)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 grouped findings, got %d", len(got))
+	}
+	if got[0].Occurrences != 2 {
+		t.Fatalf("expected 2 occurrences, got %d", got[0].Occurrences)
+	}
+	if got[0].Evidence != "first\nsecond" {
+		t.Fatalf("unexpected evidence: %q", got[0].Evidence)
+	}
+}
+
+func TestGenerateHTMLReport(t *testing.T) {
+	r := Report{
+		Meta: Meta{TargetPath: "/tmp/site"},
+		Findings: []Finding{{
+			ID:          "TEST-001",
+			Scanner:     "test",
+			File:        "<payload.php>",
+			Severity:    SeverityHigh,
+			Description: "<script>alert(1)</script>",
+		}},
+		Summary: Summary{High: 1, TotalFindings: 1, UniqueFiles: 1, EvidenceCount: 1},
+	}
+
+	dir := t.TempDir()
+	if err := GenerateHTMLReport(r, dir); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "wpscanner-report.html"))
+	if err != nil {
+		t.Fatalf("expected HTML report, got %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "WordPress Scanner") {
+		t.Error("expected report title")
+	}
+	if strings.Contains(content, "<script>alert(1)</script>") {
+		t.Error("unescaped finding content found in HTML")
 	}
 }

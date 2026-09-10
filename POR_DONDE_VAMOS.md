@@ -11,7 +11,7 @@ Estado actual del proyecto tras la sesión del 12/06/2026.
 
 ## Resumen
 
-Proyecto funcional compilado en `./wpscanner` (v1.0.3). Pipeline completo: escanea → analiza → reporta → limpia (DB local) → exporta SQL → genera informe cliente + siguientes pasos.
+Proyecto funcional compilado en `./wpscanner` (v1.4.0). Pipeline completo: escanea → analiza → reporta → limpia (DB local) → exporta SQL → genera informe cliente + siguientes pasos.
 
 ## Commands
 

@@ -35,9 +35,10 @@ escanea → analiza → reporta → revisa → limpia → verifica
 - **ClamAV** para detección de malware conocido.
 - **PHP-Malware-Finder** para analizar código PHP sospechoso.
 - **Linux Malware Detect** como motor adicional de análisis.
-- **Análisis asistido por Opencode** para revisión más profunda de hallazgos.
+- **Integridad de WordPress** mediante WP-CLI y checksums oficiales.
+- **Detección de ubicaciones PHP anómalas** en uploads y rutas sensibles.
 - **Escaneo MySQL** con comprobaciones sobre posts, comentarios, usuarios, opciones y metadatos.
-- **Informes JSON y Markdown** generados automáticamente por cada ejecución.
+- **Informes JSON, Markdown y HTML** generados automáticamente por cada ejecución.
 - **Informe para cliente** y guía de siguientes pasos.
 - **Limpieza de base de datos con confirmación**, vista previa y exportación SQL.
 - **Interfaz interactiva** con selección de scanners, spinners, tablas y confirmaciones.
@@ -50,7 +51,7 @@ escanea → analiza → reporta → revisa → limpia → verifica
 | ClamAV | Scanner `clamscan` |
 | PHP-Malware-Finder | Análisis de PHP/YARA |
 | Linux Malware Detect | Scanner `maldet` |
-| Opencode CLI | Análisis asistido opcional |
+| WP-CLI | Checksums de core y plugins |
 | MySQL/MariaDB | Escaneo opcional de base de datos |
 
 Los scanners externos son opcionales. Si uno no está instalado, el programa muestra una advertencia y continúa con los demás.
@@ -188,6 +189,7 @@ wpscanner-output/
 └── 20260612-184556/
     ├── wpscanner-report.json
     ├── wpscanner-report.md
+    ├── wpscanner-report.html
     ├── INFORME_CLIENTE.md
     ├── SIGUIENTES_PASOS.md
     └── cleanup-*.sql
@@ -208,7 +210,7 @@ wordpress-scanner/
 │   ├── verify.go        # Verificación
 │   └── report.go        # Informes para cliente
 ├── internal/
-│   ├── scanner/         # ClamAV, PMF, Maldet y Opencode
+│   ├── scanner/         # ClamAV, PMF, Maldet, integridad y anomalías
 │   ├── dbscanner/       # Conexión y queries MySQL
 │   ├── cleaner/         # Operaciones y exportación SQL
 │   ├── report/          # Modelos y generación de informes

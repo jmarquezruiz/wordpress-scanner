@@ -16,12 +16,12 @@ type DBCredentials struct {
 }
 
 type ScanConfig struct {
-	Path              string
-	Scanners          []string
-	UpdateDBs         bool
-	ShowLogs          bool
-	ScanDB            bool
-	ProceedClean      bool
+	Path         string
+	Scanners     []string
+	UpdateDBs    bool
+	ShowLogs     bool
+	ScanDB       bool
+	ProceedClean bool
 }
 
 func AskPath(defaultPath string) (string, error) {
@@ -35,12 +35,18 @@ func AskPath(defaultPath string) (string, error) {
 }
 
 func AskScanners() ([]string, error) {
-	options := []string{"ClamAV (clamscan -ri)", "PHP-Malware-Finder (YARA)", "Linux Malware Detect (maldet -a)", "Opencode Subagente (deep analysis)"}
+	options := []string{
+		"ClamAV (clamscan -ri)",
+		"PHP-Malware-Finder (YARA)",
+		"Linux Malware Detect (maldet -a)",
+		"WordPress Integrity (WP-CLI checksums)",
+		"Anomalous PHP locations",
+	}
 	selected := []string{}
 	prompt := &survey.MultiSelect{
-		Message:  "Scanners a usar:",
-		Options:  options,
-		Default:  options,
+		Message: "Scanners a usar:",
+		Options: options,
+		Default: options,
 	}
 	err := survey.AskOne(prompt, &selected)
 	return selected, err

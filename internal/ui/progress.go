@@ -169,6 +169,6 @@ __          __ _____     _____
                          jmarquez.dev
 `
 	fmt.Print(Cyan(banner))
-	fmt.Printf("  %s v1.0.3\n", Bold("WordPress Scanner"))
+	fmt.Printf("  %s v1.4.0\n", Bold("WordPress Scanner"))
 	fmt.Println()
 }
