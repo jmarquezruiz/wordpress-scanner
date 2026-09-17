@@ -44,9 +44,6 @@ func (p *PMF) Run(path string, logs bool) ([]report.Finding, error) {
 	}
 
 	args := []string{"-a", path}
-	if logs {
-		args = append(args, "-v")
-	}
 	output, err := executil.Run(pmfPath, args, logs)
 	if err != nil {
 		if len(strings.TrimSpace(string(output))) == 0 {

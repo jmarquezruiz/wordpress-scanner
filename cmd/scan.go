@@ -83,6 +83,16 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 	ui.Section("Escaneando archivos")
 	var allFindings []report.Finding
+	var liveWatch *ui.LiveWatch
+	if config.ShowLogs {
+		liveWatch = ui.NewLiveWatch(scannerNames, config.ScanDB)
+		liveWatch.Start()
+	}
+	defer func() {
+		if liveWatch != nil {
+			liveWatch.Stop()
+		}
+	}()
 	for _, name := range scannerNames {
 		var s scanner.Scanner
 		switch name {
@@ -100,6 +110,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		if liveWatch != nil {
+			liveWatch.StartItem(s.Name())
+		}
 		var sp interface{ Stop() }
 		if !config.ShowLogs {
 			spinner := ui.NewSpinner(s.Name())
@@ -109,6 +122,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 		findings, scanErr := s.Run(config.Path, config.ShowLogs)
 		if sp != nil {
 			sp.Stop()
+		}
+		if liveWatch != nil {
+			liveWatch.FinishItem(s.Name(), len(findings), scanErr)
 		}
 		allFindings = append(allFindings, findings...)
 		if scanErr != nil && len(findings) == 0 {
@@ -126,18 +142,36 @@ func runScan(cmd *cobra.Command, args []string) error {
 	var dbFindings []report.DBFinding
 	if config.ScanDB && dbCreds != nil {
 		ui.Section("Escaneando base de datos")
+		if liveWatch != nil {
+			liveWatch.StartItem("Base de datos")
+		}
 		conn := &dbscanner.MySQLConnector{}
 		if err := conn.Connect(dbCreds); err != nil {
 			ui.CheckFail("Error conectando a MySQL: " + err.Error())
+			if liveWatch != nil {
+				liveWatch.FinishItem("Base de datos", 0, err)
+			}
 		} else {
 			defer conn.Close()
-			sp := ui.NewSpinner("Ejecutando queries de detección...")
-			sp.Start()
+			var sp interface{ Stop() }
+			if liveWatch == nil {
+				spinner := ui.NewSpinner("Ejecutando queries de detección...")
+				spinner.Start()
+				sp = spinner
+			}
 			results, err := conn.RunAllChecks()
-			sp.Stop()
+			if sp != nil {
+				sp.Stop()
+			}
 			if err != nil {
 				ui.CheckFail("Error en escaneo DB: " + err.Error())
+				if liveWatch != nil {
+					liveWatch.FinishItem("Base de datos", 0, err)
+				}
 			} else {
+				if liveWatch != nil {
+					liveWatch.FinishItem("Base de datos", len(results), nil)
+				}
 				for _, res := range results {
 					for _, f := range res.Findings {
 						dbFindings = append(dbFindings, report.DBFinding{
@@ -158,6 +192,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}
+	}
+	if liveWatch != nil {
+		liveWatch.Stop()
 	}
 
 	ui.Section("Generando reportes")
@@ -278,7 +315,7 @@ func buildReport(path string, creds *ui.DBCredentials, findings []report.Finding
 	return report.Report{
 		Meta: report.Meta{
 			Tool:           "wordpress-scanner",
-			Version:        "1.4.0",
+			Version:        "1.4.1",
 			ScanDate:       time.Now().Format(time.RFC3339),
 			TargetPath:     path,
 			TargetDomain:   domain,

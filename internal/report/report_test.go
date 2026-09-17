@@ -27,7 +27,7 @@ func TestReportJSONRoundTrip(t *testing.T) {
 	r := Report{
 		Meta: Meta{
 			Tool:    "wordpress-scanner",
-			Version: "1.4.0",
+			Version: "1.4.1",
 		},
 		Findings: []Finding{
 			{
@@ -60,8 +60,8 @@ func TestReportJSONRoundTrip(t *testing.T) {
 		t.Fatalf("expected no error loading report, got %v", err)
 	}
 
-	if loaded.Meta.Version != "1.4.0" {
-		t.Errorf("expected version 1.4.0, got %s", loaded.Meta.Version)
+	if loaded.Meta.Version != "1.4.1" {
+		t.Errorf("expected version 1.4.1, got %s", loaded.Meta.Version)
 	}
 	if len(loaded.Findings) != 1 {
 		t.Errorf("expected 1 finding, got %d", len(loaded.Findings))
